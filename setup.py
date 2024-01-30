@@ -11,6 +11,7 @@ setup(
         "seaborn",
         "scipy",
         "scikit-learn",
-        "tushare"
+        "tushare",
+        "tqdm"
     ]
 )

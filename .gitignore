@@ -5,3 +5,4 @@ dev/
 *environ.yml
 *dev.ipynb
 *.db
+logging/

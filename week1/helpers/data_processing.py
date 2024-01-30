@@ -106,4 +106,8 @@ def read_from_db(table_name: str, db_filename: str, parse_dates=True):
         df = pd.read_sql(stmt, conn, index_col=["date", "ts_code"])
     conn.close()
 
+    df.fillna(np.nan, inplace=True)
+    df.sort_index(inplace=True)
+
     return df
+
