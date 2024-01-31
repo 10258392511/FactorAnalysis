@@ -6,6 +6,7 @@ import os
 
 from pandas.tseries.offsets import BDay
 from datetime import datetime as dt
+from typing import Iterable
 from tqdm import tqdm
 
 
@@ -225,3 +226,150 @@ def query_and_save_all_raw_data(db_filename: str, log_dir: str, start_yr=2018, e
         except Exception as err:
             print(f"Unsuccessful with error {err}: {ts_code}", file=log_file)
     log_file.close()
+
+
+def __compute_daily_basic_period(df_daily_basic: pd.DataFrame):
+    """
+        Default: total_mv, pe, pb, turnover_rate
+    """
+    fields = "total_mv, pe, pb, turnover_rate, trade_date".split(", ")
+
+    df_out = df_daily_basic[fields].set_index("trade_date")
+    df_out.index = pd.to_datetime(df_out.index)
+    df_out.sort_index(inplace=True)
+
+    return df_out
+
+
+def __compute_daily_period(df_daily_in: pd.DataFrame, **kwargs):
+    """
+    Default: reversal_rate, volatility
+    kwargs: reversal_duration: int, vol_duration: int
+
+    reversal_rate is the pct_chg over a period of time
+    """
+    reversal_duration = kwargs.get("reversal_duration", 5)
+    vol_duration = kwargs.get("vol_duration", 30)
+    df_daily = df_daily_in.set_index("trade_date")
+    df_daily.index = pd.to_datetime(df_daily.index)
+    df_daily.sort_index(inplace=True)
+
+    df_out = pd.DataFrame(columns=["reversal_rate", "volatility"])
+    df_out["reversal_rate"] = df_daily["close"].rolling(reversal_duration).apply(
+        lambda arr: (arr.iloc[-1] - arr.iloc[0]) / arr.iloc[0] * 100
+    )
+    df_out["volatility"] = df_daily["pct_chg"].rolling(vol_duration).std()
+    df_out = pd.concat([df_out, df_daily[["open", "high", "low", "close", "vol"]]], axis=1)
+
+    return df_out
+
+
+def __reindex_df(df: pd.DataFrame, df_index: pd.DataFrame):
+    """
+    df, df_index: After .set_index(.) and naming the index
+    """
+    df_index.index = pd.to_datetime(df_index.index)
+    df.index = pd.to_datetime(df.index)
+    df_index = df_index.sort_index()
+    df = df.sort_index()
+    mask = df.index.duplicated(keep="first")
+    df = df[~mask]
+    df = df.reindex(index=df_index.index, method="ffill")
+
+    return df
+
+
+def __compute_fina_indicator_period(df_fina_indicator: pd.DataFrame, df_daily: pd.DataFrame):
+    """
+    df_daily: for indices
+    """
+    fields = "roe, netprofit_yoy, or_yoy, assets_yoy, equity_yoy, end_date".split(", ")
+    df_fina_indicator = df_fina_indicator[fields]
+    df_daily = df_daily.set_index("trade_date")
+    df_fina_indicator = df_fina_indicator.set_index("end_date")
+    df_fina_indicator.index.name = "trade_date"
+    df_fina_indicator = __reindex_df(df_fina_indicator, df_daily)
+
+    return df_fina_indicator
+
+
+def __compute_financial_statements_period(df_income: pd.DataFrame, df_bs: pd.DataFrame, df_cf: pd.DataFrame,
+                                          df_daily: pd.DataFrame):
+    # Reindexing
+    df_dict = {
+        "income": df_income,
+        "bs": df_bs,
+        "cf": df_cf
+    }
+
+    df_daily = df_daily.set_index("trade_date")
+
+    for key in df_dict:
+        df_iter = df_dict[key]
+        df_iter = df_iter.set_index("end_date")
+        df_iter.index.name = "trade_date"
+        df_iter = __reindex_df(df_iter, df_daily)
+        df_dict[key] = df_iter
+
+    df_income = df_dict["income"]
+    df_bs = df_dict["bs"]
+    df_cf = df_dict["cf"]
+
+    data_out = {
+        "gross_profit_margin": df_income["total_profit"] / df_income["revenue"],
+        "operating_profit_margin": df_income["operate_profit"] / df_income["revenue"],
+        "net_profit_margin": df_income["n_income"] / df_income["revenue"],
+        "operating_cash_flow_to_net_income": df_cf["n_cashflow_act"] / df_income["n_income"],
+        "operating_cash_flow_to_revenue": df_cf["n_cashflow_act"] / df_income["revenue"],
+        "current_ratio": df_bs["total_cur_assets"] / df_bs["total_cur_liab"],
+        "cash_current_liability_ratio": df_cf["n_cashflow_act"] / df_bs["total_cur_liab"],
+        "cash_liability_ratio": df_cf["n_cashflow_act"] / df_bs["total_liab"],
+        "long_term_liability_operating_cash_flow_ratio": df_bs["lt_borr"] / df_cf["n_cashflow_act"]
+    }
+
+    df_out = pd.DataFrame(data_out)
+
+    return df_out
+
+
+def compute_factors_period(ts_code: str, db_raw_data_filename: str):
+    """
+    See compute_factors.ipynb for all factor names.
+    """
+    df_daily_basic = read_from_db(f"daily_basic_{ts_code}".replace(".", "_"), db_raw_data_filename, False, False)
+    df_daily = read_from_db(f"daily_{ts_code}".replace(".", "_"), db_raw_data_filename, False, False)
+    df_fina_indicator = read_from_db(f"fina_indicator_{ts_code}".replace(".", "_"), db_raw_data_filename, False, False)
+    df_income = read_from_db(f"income_{ts_code}".replace(".", "_"), db_raw_data_filename, False, False)
+    df_bs = read_from_db(f"balancesheet_{ts_code}".replace(".", "_"), db_raw_data_filename, False, False)
+    df_cashflow = read_from_db(f"cashflow_{ts_code}".replace(".", "_"), db_raw_data_filename, False, False)
+
+    df_out = list()
+    df_out.append(__compute_daily_basic_period(df_daily_basic))
+    df_out.append(__compute_daily_period(df_daily))
+    df_out.append(__compute_fina_indicator_period(df_fina_indicator, df_daily))
+    df_out.append(__compute_financial_statements_period(df_income, df_bs, df_cashflow, df_daily))
+    df_out = pd.concat(df_out, axis=1)
+    df_out["ts_code"] = ts_code
+
+    return df_out.reset_index()
+
+
+def compute_factors_and_save(ts_codes: Iterable[str], db_in_filename: str, db_out_filename: str, log_dir: str):
+    conn = sqlite3.connect(db_out_filename)
+    timestamp = dt.today().strftime("%Y%m%d_%H%M%S")
+    log_file = open(os.path.join(log_dir, f"{timestamp}.log"), "a")
+    all_factors = list()
+    for ts_code in tqdm(ts_codes):
+        try:
+            df_out = compute_factors_period(ts_code, db_in_filename)
+            all_factors.append(df_out)
+        except Exception as err:
+            print(f"Unsuccessful with error {err}: {ts_code}", file=log_file)
+
+    all_factors = pd.concat(all_factors, axis=0).set_index(["trade_date", "ts_code"]).sort_index()
+    all_factors.to_sql("factors_all_stocks", conn, if_exists="replace")
+
+    log_file.close()
+    conn.close()
+
+    return all_factors
