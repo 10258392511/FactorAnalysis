@@ -94,16 +94,19 @@ def save_to_db(today: str, selected_stock_code: Iterable,
     conn.close()
 
 
-def read_from_db(table_name: str, db_filename: str, parse_dates=True):
+def read_from_db(table_name: str, db_filename: str, parse_dates=True, use_index=True):
     conn = sqlite3.connect(db_filename)
     stmt = f"""
     SELECT *
     FROM {table_name}
     """
-    if parse_dates:
-        df = pd.read_sql(stmt, conn, index_col=["date", "ts_code"], parse_dates=["date"])
+    if use_index:
+        if parse_dates:
+            df = pd.read_sql(stmt, conn, index_col=["date", "ts_code"], parse_dates=["date"])
+        else:
+            df = pd.read_sql(stmt, conn, index_col=["date", "ts_code"])
     else:
-        df = pd.read_sql(stmt, conn, index_col=["date", "ts_code"])
+        df = pd.read_sql(stmt, conn)
     conn.close()
 
     df.fillna(np.nan, inplace=True)

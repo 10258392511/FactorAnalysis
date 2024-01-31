@@ -164,3 +164,64 @@ def save_factors_others(db_filename: str, table_name: str):
     conn.close()
 
     return df_out
+
+
+def get_all_stocks():
+    all_stocks = PRO.stock_basic(ts_code="", list_status="L", fields="ts_code")
+
+    return all_stocks["ts_code"]
+
+
+def query_period_all_raw_data(ts_code: str, start_yr: int, end_yr: int, db_filename=None):
+    if db_filename is not None:
+        conn = sqlite3.connect(db_filename)
+
+    raw_data_dict = {
+        "daily_basic": [],
+        "daily": [],
+        "fina_indicator": [],
+        "income": [],
+        "balancesheet": [],
+        "cashflow": []
+    }
+    interfaces = {
+        "daily_basic": PRO.daily_basic,
+        "daily": PRO.daily,
+        "fina_indicator": PRO.fina_indicator,
+        "income": PRO.income,
+        "balancesheet": PRO.balancesheet,
+        "cashflow": PRO.cashflow
+    }
+
+    for year_iter in range(start_yr, end_yr + 1):
+        start_date = f"{year_iter}0101"
+        end_date = f"{year_iter}1231"
+        for func_iter_key in raw_data_dict:
+            func_iter = interfaces[func_iter_key]
+            data_df = func_iter(ts_code=ts_code, start_date=start_date, end_date=end_date)
+            raw_data_dict[func_iter_key].append(data_df.fillna(np.nan))
+
+    out_dict = {}
+    for func_iter_key in raw_data_dict:
+        out_dict[func_iter_key] = pd.concat(raw_data_dict[func_iter_key])
+
+        if db_filename is not None:
+            out_dict[func_iter_key].to_sql(f"{func_iter_key}_{ts_code}".replace(".", "_"), conn, if_exists="replace")
+
+    if db_filename is not None:
+        conn.close()
+
+    return out_dict
+
+
+def query_and_save_all_raw_data(db_filename: str, log_dir: str, start_yr=2018, end_yr=2023):
+    timestamp = dt.today().strftime("%Y%m%d_%H%M%S")
+    log_file = open(os.path.join(log_dir, f"{timestamp}.log"), "a")
+
+    all_stocks = get_all_stocks()
+    for ts_code in tqdm(all_stocks):
+        try:
+            query_period_all_raw_data(ts_code, start_yr, end_yr, db_filename)
+        except Exception as err:
+            print(f"Unsuccessful with error {err}: {ts_code}", file=log_file)
+    log_file.close()
