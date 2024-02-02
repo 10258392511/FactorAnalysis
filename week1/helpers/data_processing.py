@@ -101,10 +101,16 @@ def read_from_db(table_name: str, db_filename: str, parse_dates=True, use_index=
     FROM {table_name}
     """
     if use_index:
+        df = pd.read_sql(stmt, conn)
+        date_colname = None
+        if "date" in df.columns:
+            date_colname = "date"
+        elif "trade_date" in df.columns:
+            date_colname = "trade_date"
         if parse_dates:
-            df = pd.read_sql(stmt, conn, index_col=["date", "ts_code"], parse_dates=["date"])
+            df = pd.read_sql(stmt, conn, index_col=[date_colname, "ts_code"], parse_dates=[date_colname])
         else:
-            df = pd.read_sql(stmt, conn, index_col=["date", "ts_code"])
+            df = pd.read_sql(stmt, conn, index_col=[date_colname, "ts_code"])
     else:
         df = pd.read_sql(stmt, conn)
     conn.close()
@@ -113,4 +119,3 @@ def read_from_db(table_name: str, db_filename: str, parse_dates=True, use_index=
     df.sort_index(inplace=True)
 
     return df
-

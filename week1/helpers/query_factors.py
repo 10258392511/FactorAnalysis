@@ -389,3 +389,27 @@ def compute_factors_and_save(ts_codes: Iterable[str], db_in_filename: str, db_ou
     conn.close()
 
     return all_factors
+
+
+def construct_index_factors(index_code: str, stocks_db_filename: str, factors_db_filename: str,
+                            stocks_raw_data_db_filename: str, if_save=False):
+    index_raw_df = read_from_db(f"index_info_{index_code}".replace(".", "_"), stocks_db_filename, False, False)
+    daily = read_from_db("daily_000001_SZ", stocks_raw_data_db_filename, False, False)
+    index_df = index_raw_df.rename(columns={"con_code": "ts_code"})[["ts_code", "trade_date", "weight"]]
+    index_df = index_df.pivot(columns="ts_code", index="trade_date", values="weight")
+    index_df = __reindex_df(index_df, daily.set_index("trade_date"))
+    index_df = index_df.stack(level=-1).sort_index().reset_index()
+    all_factors = read_from_db("factors_all_stocks", factors_db_filename, False, False)
+    all_factors["trade_date"] = pd.to_datetime(all_factors["trade_date"])
+    index_df = index_df.merge(all_factors, on=["trade_date", "ts_code"], how="left")
+
+    # Only keep stocks with vol > 0
+    mask = index_df.vol.isna() | (index_df.vol <= 0)
+    index_df = index_df.drop(columns=0)[~mask]  # drop "weight" from index_raw_df
+
+    if if_save:
+        conn = sqlite3.connect(factors_db_filename)
+        index_df.to_sql(f"factors_index_{index_code}".replace(".", "_"), conn, if_exists="replace")
+        conn.close()
+
+    return index_df
