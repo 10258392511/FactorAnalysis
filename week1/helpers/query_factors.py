@@ -173,6 +173,12 @@ def get_all_stocks():
     return all_stocks["ts_code"]
 
 
+def get_index_stocks(ts_code: str, stocks_db_filename: str):
+    data_df = read_from_db(f"index_info_{ts_code}".replace(".", "_"), stocks_db_filename, False, False)
+
+    return data_df.con_code.unique()
+
+
 def query_period_all_raw_data(ts_code: str, start_yr: int, end_yr: int, db_filename=None):
     if db_filename is not None:
         conn = sqlite3.connect(db_filename)
@@ -354,21 +360,31 @@ def compute_factors_period(ts_code: str, db_raw_data_filename: str):
     return df_out.reset_index()
 
 
-def compute_factors_and_save(ts_codes: Iterable[str], db_in_filename: str, db_out_filename: str, log_dir: str):
+def compute_factors_and_save(ts_codes: Iterable[str], db_in_filename: str, db_out_filename: str, log_dir: str,
+                             print_interval=50):
     conn = sqlite3.connect(db_out_filename)
     timestamp = dt.today().strftime("%Y%m%d_%H%M%S")
     log_file = open(os.path.join(log_dir, f"{timestamp}.log"), "a")
+    orig_stdout = sys.stdout
+    orig_stderr =  sys.stderr
+    sys.stdout = log_file
+    sys.stderr = log_file
     all_factors = list()
-    for ts_code in tqdm(ts_codes):
+    for i, ts_code in enumerate(tqdm(ts_codes)):
         try:
             df_out = compute_factors_period(ts_code, db_in_filename)
             all_factors.append(df_out)
+            if i % print_interval == 1:
+                print(pd.concat(all_factors, axis=0).set_index(["trade_date", "ts_code"]).sort_index())
+                print("-" * 100)
         except Exception as err:
-            print(f"Unsuccessful with error {err}: {ts_code}", file=log_file)
+            print(f"Unsuccessful with error {err}: {ts_code}")
 
     all_factors = pd.concat(all_factors, axis=0).set_index(["trade_date", "ts_code"]).sort_index()
     all_factors.to_sql("factors_all_stocks", conn, if_exists="replace")
 
+    sys.stdout = orig_stdout
+    sys.stderr = orig_stderr
     log_file.close()
     conn.close()
 
