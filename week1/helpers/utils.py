@@ -1,4 +1,6 @@
+import pandas as pd
 import tushare as ts
+import sqlite3
 import yaml
 import os
 
@@ -16,3 +18,10 @@ def load_pro(env_filename=None):
     pro = ts.pro_api(token)
 
     return pro
+
+
+def save_to_db(df: pd.DataFrame, db_filename: str, table_name: str, if_exists="replace"):
+    conn = sqlite3.connect(db_filename)
+    df.to_sql(table_name, conn, if_exists=if_exists)
+    conn.close()
+
