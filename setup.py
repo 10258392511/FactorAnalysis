@@ -12,6 +12,9 @@ setup(
         "scipy",
         "scikit-learn",
         "tushare",
+        "zipline-reloaded",
+        "alphalens-reloaded",
+        "pyfolio-reloaded",
         "tqdm"
     ]
 )

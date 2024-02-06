@@ -18,8 +18,11 @@ def remove_duplicates(factors: pd.DataFrame):
     return factors[~factors.index.duplicated(keep="first")]
 
 
-def pop_OHLCV(factors: pd.DataFrame):
+def pop_OHLCV(factors: pd.DataFrame, start_date=None):
+    # factors: index: trade_date, ts_code
     factors = remove_duplicates(factors)
+    if start_date is not None:
+        factors = factors.loc[(slice(start_date, None),)]
     columns = ["open", "high", "low", "close", "vol"]
     OHLCV = factors[columns]
     factors = factors.drop(columns=columns)
