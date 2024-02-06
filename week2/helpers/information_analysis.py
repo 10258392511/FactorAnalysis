@@ -170,7 +170,7 @@ def factor_analysis_all(price: pd.DataFrame, factors: pd.DataFrame, **kwargs):
 
     for col in tqdm(factors.columns):
         print(f"Factor {col}")
-        ic_df, ic_r_df, ir_series, ir_r_series = factor_analysis_single(price, factors[col])
+        ic_df, ic_r_df, ir_series, ir_r_series = factor_analysis_single(price, factors[col], **kwargs)
         all_ic_df[col] = ic_df.stack(level=-1)  # date, period | factor1, ...
         all_ic_r_df[col] = ic_r_df.stack(level=-1)
         all_ir_df[col] = ir_series
