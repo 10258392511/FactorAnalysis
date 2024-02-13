@@ -6,3 +6,4 @@ dev/
 *dev.ipynb
 *.db
 logging/
+*data/
