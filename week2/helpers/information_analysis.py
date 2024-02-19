@@ -4,9 +4,17 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import seaborn as sns
 import alphalens as al
+import os
 
 from scipy.stats import pearsonr, spearmanr
 from tqdm import tqdm
+
+
+ROOT_DIR = os.path.abspath(__file__)
+for _ in range(3):
+    ROOT_DIR = os.path.dirname(ROOT_DIR)
+
+WEIGHTS_FILENAMES = ("IC", "IC_rank", "IR", "IR_rank")
 
 
 def get_clean_factor_and_forward_returns(price: pd.DataFrame, factor: pd.Series, periods=(1, 5, 10),
@@ -178,3 +186,38 @@ def factor_analysis_all(price: pd.DataFrame, factors: pd.DataFrame, **kwargs):
         print("=" * 100)
 
     return all_ic_df, all_ic_r_df, all_ir_df, all_ir_r_df
+
+
+def read_in_weights(filenames=WEIGHTS_FILENAMES):
+    all_df = []
+    for filename in WEIGHTS_FILENAMES:
+        full_filename = os.path.join(ROOT_DIR, "week2", "data", "outputs", f"{filename}.xlsx")
+        if "IC" in filename:
+            df_iter = pd.read_excel(full_filename, index_col=[0, 1], parse_dates=["date"])
+            df_iter = (
+                df_iter
+                .unstack(level=-1)
+                .mean(axis=0)  # Series: factor, period | (val)
+                .unstack(level=0)  # period| factor1, ...
+            )
+        else:
+            df_iter = pd.read_excel(full_filename, index_col=[0])
+
+        rename_dict = {colname: f"{filename}_{colname}" for colname in df_iter.index}
+        df_iter.rename(index=rename_dict, inplace=True)
+        all_df.append(df_iter)
+
+    all_df = pd.concat(all_df, axis=0)
+    all_df /= np.abs(all_df.values).sum(axis=1, keepdims=True)
+
+    return all_df
+
+
+def combine_factors(factors: pd.DataFrame, weights: pd.DataFrame):
+    """
+    factors: trade_date, ts_code | factor1, ...  (num_entries, num_factors)
+    weights: (weight_name) | factor1, ...  (num_weights, num_factors)
+    """
+    combined_factors = factors @ weights.T
+
+    return combined_factors
