@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import seaborn as sns
 import alphalens as al
+import sqlite3
 import os
 
 from scipy.stats import pearsonr, spearmanr
@@ -213,11 +214,16 @@ def read_in_weights(filenames=WEIGHTS_FILENAMES):
     return all_df
 
 
-def combine_factors(factors: pd.DataFrame, weights: pd.DataFrame):
+def combine_factors(factors: pd.DataFrame, weights: pd.DataFrame, db_out_filename=None):
     """
     factors: trade_date, ts_code | factor1, ...  (num_entries, num_factors)
     weights: (weight_name) | factor1, ...  (num_weights, num_factors)
     """
     combined_factors = factors @ weights.T
+
+    if db_out_filename is not None:
+        conn = sqlite3.connect(db_out_filename)
+        combined_factors.to_sql("combined_factors", conn, if_exists="replace")
+        conn.close()
 
     return combined_factors
