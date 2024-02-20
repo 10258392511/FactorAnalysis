@@ -24,7 +24,7 @@ def load_combined_factors_quantile(combined_factors: pd.DataFrame, weighting_nam
     """
     combined_factors: trade_date, ts_code | weighting_name1, ...
     """
-    bundle_data = bundles.load("A-share-csvdir-bundle")
+    bundle_data = bundles.load("AShareBundle")
 
     factors = combined_factors[weighting_name].unstack(level=-1)  # trade_date | ts_code1, ...
     colname_dict = {colname: colname.replace(".", "") for colname in factors.columns}
@@ -41,7 +41,7 @@ def load_mv(factors_raw: pd.DataFrame):
     """
     factors_raw: trade_date, ts_code | weighting_name1, ...
     """
-    bundle_data = bundles.load("A-share-csvdir-bundle")
+    bundle_data = bundles.load("AShareBundle")
 
     factors = factors_raw["total_mv"].unstack(level=-1)  # trade_date | ts_code1, ...
     colname_dict = {colname: colname.replace(".", "") for colname in factors.columns}
