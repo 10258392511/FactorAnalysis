@@ -16,6 +16,7 @@ setup(
         "alphalens-reloaded",
         "pyfolio-reloaded",
         "openpyxl",
+        "ipywidgets",
         "tqdm"
     ]
 )

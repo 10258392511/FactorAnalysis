@@ -72,8 +72,8 @@ def rebalance(context: TradingAlgorithm, data: BarData):
     if context.num_days % context.print_interval == 0:
         print(context.get_datetime())
     df = context.pipeline_data  # equity_id | quantile, mv
-    q_mask = df["quantile"] == context.num_quantiles - 1
-    # q_mask = df["quantile"] == 0
+    # q_mask = df["quantile"] == context.num_quantiles - 1
+    q_mask = df["quantile"] == 0
 
     df = df[q_mask].copy()
     assets = set(df.index)
