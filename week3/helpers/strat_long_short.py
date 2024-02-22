@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 import pyfolio as pf
 import os
 
@@ -134,7 +135,11 @@ def load_benchmark(benchmark_filename: str):
     return benchmark_df["benchmark"] / 100
 
 
-def create_full_tear_sheet(res_df: Union[pd.DataFrame, str], benchmark_filename: str):
+def create_full_tear_sheet(res_df: Union[pd.DataFrame, str], benchmark_filename: str, **kwargs):
+    """
+    kwargs: round_trips = True
+    """
+    round_trips = kwargs.get("round_trips", True)
     if isinstance(res_df, str):
         assert ".pkl" in res_df
         res_df = pd.read_pickle(res_df)
@@ -146,4 +151,5 @@ def create_full_tear_sheet(res_df: Union[pd.DataFrame, str], benchmark_filename:
     res_df.index = res_df.index.normalize()
     benchmark_series = benchmark_series.to_frame().reindex(res_df.index).ffill()
     benchmark_series = benchmark_series.iloc[:, 0]
-    pf.create_full_tear_sheet(returns, positions, transactions, benchmark_rets=benchmark_series, round_trips=True)
+    pf.create_full_tear_sheet(returns, positions, transactions, benchmark_rets=benchmark_series, round_trips=round_trips)
+    plt.show()
