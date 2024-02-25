@@ -88,6 +88,60 @@ def rebalance(context: TradingAlgorithm, data: BarData):
         order_target_percent(asset_iter, df.loc[asset_iter, "weight"])
 
 
+def rebalance_factory(position: int, tgt_quantile: int):
+    """
+    tgt_quantile: 0-based
+    """
+    assert position in [-1, 1]
+
+    def func(context: TradingAlgorithm, data: BarData):
+        """
+        Long positions only
+        """
+        if context.num_days % context.rebalance_period != 0:
+            return
+
+        if context.num_days % context.print_interval == 0:
+            print(context.get_datetime())
+        df = context.pipeline_data  # equity_id | quantile, mv
+        q_mask = df["quantile"] == tgt_quantile
+
+        df = df[q_mask].copy()
+        assets = set(df.index)
+        df["weight"] = df["mv"] / df["mv"].sum()
+
+        for asset_iter in context.portfolio.positions:
+            if asset_iter not in assets:
+                order_target_percent(asset_iter, 0)
+
+        for asset_iter in assets:
+            order_target_percent(asset_iter, df.loc[asset_iter, "weight"] * position)
+
+    return func
+
+
+def initialize_factory(position: int, tgt_quantile: int):
+    """
+    position, tgt_quantile: see rebalance_factory(.)
+    """
+    assert position in [-1, 1]
+
+    def func(context: TradingAlgorithm):
+        set_commission(PerShare(0., 0.))
+        set_slippage(FixedSlippage(spread=0.))
+
+        schedule_function(rebalance_factory(position, tgt_quantile), date_rules.every_day(), time_rules.market_close())
+
+        attach_pipeline(make_pipeline(), "my_pipeline")
+
+        context.num_days = 0
+        context.rebalance_period = 5
+        context.num_quantiles = 5
+        context.print_interval = 100
+
+    return func
+
+
 def run_algo(
         combined_factors: pd.DataFrame,
         factors_all: pd.DataFrame,
@@ -97,7 +151,7 @@ def run_algo(
 ):
     """
     combined_factors: all weighting types
-    kwargs: start_date, end_date, capital_base
+    kwargs: start_date, end_date, capital_base, position, quantile
     """
     factors_quantile, _ = load_combined_factors_quantile(combined_factors, weighting_name)
     factors_mv, _ = load_mv(factors_all)
@@ -109,18 +163,24 @@ def run_algo(
     start_date = pd.to_datetime(kwargs.get("start_date", "20190102"))
     end_date = pd.to_datetime(kwargs.get("end_date", "20231231"))
     capital_base = kwargs.get("capital_base", 1e6)
+    position = kwargs.get("position", 1)
+    quantile = kwargs.get("quantile", 4)  # 0-based
+
     res_df = run_algorithm(
         start=start_date,
         end=end_date,
         capital_base=capital_base,
-        initialize=initialize,
+        initialize=initialize_factory(position, quantile),
         before_trading_start=before_trading_start,
         bundle="AShareBundle",
         custom_loader=signal_loader
     )
 
     if save_dir is not None:
-        filename = os.path.join(save_dir, f"{weighting_name}.pkl")
+        if not os.path.isdir(save_dir):
+            os.makedirs(save_dir)
+        position_name = "long" if position == 1 else "short"
+        filename = os.path.join(save_dir, f"{weighting_name}_{position_name}_q_{quantile + 1}.pkl")
         res_df.to_pickle(filename)
 
     return res_df
