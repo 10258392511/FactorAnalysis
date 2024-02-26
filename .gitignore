@@ -7,3 +7,5 @@ dev/
 *.db
 logging/
 *data/
+*qlib/
+

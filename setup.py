@@ -15,6 +15,7 @@ setup(
         "zipline-reloaded",
         "alphalens-reloaded",
         "pyfolio-reloaded",
+        "pyqlib",
         "openpyxl",
         "ipywidgets",
         "tqdm"
